@@ -1,97 +1,158 @@
 package com.example.darshmakani.newsapp;
+
+import android.content.Intent;
+import android.net.Uri;
 import android.os.AsyncTask;
+
+
 import android.support.v7.app.AppCompatActivity;
+
 import android.os.Bundle;
+
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
+
 import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.Button;
-import android.widget.ProgressBar;
-import android.widget.TextView;
-import com.example.darshmakani.newsapp.utilities.NetworkUtils;
 
+
+import android.widget.EditText;
+
+import android.widget.ProgressBar;
+
+import com.example.darshmakani.newsapp.model.NewsItem;
+
+
+import com.example.darshmakani.newsapp.utilities.NetworkUtils;
+import com.example.darshmakani.newsapp.utilities.NewsAdapter;
+
+import org.json.JSONException;
+import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
+
 // Code by Darsh Makani
 
-public class MainActivity extends AppCompatActivity {
 
-    private TextView newsTextView;
+public class MainActivity extends AppCompatActivity {
+    static final String TAG = "mainactivity";
+
+    /* private TextView newsTextView;
     private TextView newsUrlView;
+    private ProgressBar progressBar;*/
+
+
+    private RecyclerView mRecyclerView;
+
+    private EditText mSearchBoxEditText;
     private ProgressBar progressBar;
-    private Button searchButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
 
-       /* mSearchButton = (Button) findViewById(R.id.news_button);
-       */
-        newsTextView = (TextView) findViewById(R.id.news_api_data);
-        newsUrlView = (TextView) findViewById(R.id.news_url);
+        mRecyclerView = (RecyclerView) findViewById(R.id.news_recyclerview);
+
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
+
+        mRecyclerView.setLayoutManager(layoutManager);
+
+        mRecyclerView.setHasFixedSize(true);
+
+        mSearchBoxEditText = (EditText) findViewById(R.id.search);
+
         progressBar = (ProgressBar) findViewById(R.id.progress_bar);
 
-        //loadNewsData();
+        loadNewsData();
+    }
+    private void loadNewsData() {
+        new NewsData("").execute();
     }
 
-   // Implemented a search menu item
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
 
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.newsmenu, menu);
+        getMenuInflater().inflate(R.menu.newsmenu, menu);
+
         return true;
     }
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int menu_id = item.getItemId();
 
         if (menu_id == R.id.search) {
-            newsUrlView.setText("");
-            loadNewsData();
+
+            String s = mSearchBoxEditText.getText().toString();
+
+            NewsData task = new NewsData(s);
+
+            task.execute();
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
-    private void loadNewsData() {
-        URL NewsSearchUrl = NetworkUtils.buildUrl();
-        newsUrlView.setText(NewsSearchUrl.toString());
-        new NewsData().execute();
-    }
+    class NewsData extends AsyncTask<URL, Void, ArrayList<NewsItem>> implements NewsAdapter.ItemClickListener {
+        String query;
+        ArrayList<NewsItem> data;
 
+        NewsData(String s) {
 
-   // Extended and implemented a subclass naming NewsData of AsyncTask to handle the http request
-
-    public class NewsData extends AsyncTask<Void, Void, String> {
-
-
+            query = s;
+        }
         //  set visibility of spinning progress bars
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
             progressBar.setVisibility(View.VISIBLE);
         }
-
         @Override
-        protected String doInBackground(Void... params) {
+        protected ArrayList<NewsItem> doInBackground(URL... params) {
+
+            ArrayList<NewsItem> result = null;
+
             URL newsRequestURL = NetworkUtils.buildUrl();
+
             try {
-                return NetworkUtils.getResponseFromHttpUrl(newsRequestURL);
-            } catch (Exception e) {
+                String json = NetworkUtils.getResponseFromHttpUrl(newsRequestURL);
+                result = NetworkUtils.parseJSON(json);
+            } catch (IOException e) {
                 e.printStackTrace();
-                return null;
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
+            return result;
         }
 
         @Override
-        protected void onPostExecute(String newsData) {
+        protected void onPostExecute(final ArrayList<NewsItem> newsData) {
+            this.data = newsData;
+            super.onPostExecute(data);
+
             progressBar.setVisibility(View.INVISIBLE);
-            if (newsData != null) {
-                newsTextView.setText(newsData);
+
+            if (data != null) {
+                NewsAdapter adapter = new NewsAdapter(data, this);
+                mRecyclerView.setAdapter(adapter);
+            }
+        }
+        @Override
+        public void onListItemClick(int clickedItemIndex) {
+
+            openWebPage(data.get(clickedItemIndex).getUrl());
+        }
+
+        public void openWebPage(String url) {
+
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+
+            if (intent.resolveActivity(getPackageManager()) != null) {
+                startActivity(intent);
             }
         }
     }
-
 }
